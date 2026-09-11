@@ -1,0 +1,37 @@
+{
+  "summary": "Customer auth feature (Google-gated) verified end-to-end. Backend: all 4 customer routes (/api/customer/auth/session, /me, /logout, /orders) + gated POST /api/orders behave correctly. Direct DB session injection allowed testing without real OAuth. Admin regression flow (approve/reject/complete) works and status transitions correctly reflect in /api/customer/orders. Frontend: /connexion, /mon-compte guard+redirect (returnTo), /commander guard, nav switch (nav-login vs nav-account), CustomerDashboard KPIs/list/filters/logout, Checkout email prefilled from Google session, and /mes-commandes still public — all pass. The pre-existing HIGH bug from iteration_1 is STILL PRESENT and now demonstrably blocks the client checkout flow: POST /api/orders returns 500 even though the order is inserted (visible in /api/customer/orders). Root cause unchanged: ObjectId serialization in the returned doc.",
+  "tested_scope": ["backend", "frontend", "auth", "integration"],
+  "passed": [
+    "GET /api/customer/auth/me without cookie -> 401 'Connexion client requise'",
+    "POST /api/customer/auth/session with invalid session_id -> 401 'Échec authentification'",
+    "POST /api/orders without customer session -> 401 (gating enforced)",
+    "After DB injection (customer client@test.com + customer_session ctest_XXX), GET /api/customer/auth/me with Authorization Bearer -> 200 returns Customer {id, email, name, created_at}",
+    "POST /api/orders with customer cookie: order is created; customer_email is forced to authenticated client@test.com (spoofed 'spoof@evil.com' payload was ignored); order_number FT-XXXXXXXX; status=pending; total_amount = unit_price * qty (479.4 for 239.7*2)",
+    "GET /api/customer/orders returns ONLY the authenticated client's orders (isolation confirmed: other@test.com order NOT returned)",
+    "POST /api/customer/auth/logout deletes session; subsequent Bearer auth/me -> 401 'Session invalide'",
+    "Admin regression: GET /api/auth/me (super_admin), POST /api/admin/orders/{id}/approve|reject|complete transitions status correctly (pending->approved->completed, and separate order pending->rejected with rejection_reason='test rejection')",
+    "Status changes made by admin are immediately reflected in /api/customer/orders (approved, completed, rejected all propagate)",
+    "GET /api/admin/stats works and reflects new counts",
+    "Frontend /connexion renders [data-testid=customer-google-login] with text 'Continuer avec Google'",
+    "Frontend Layout: nav-login present when logged out, nav-account present (and nav-login absent) when customer_session_token cookie injected",
+    "Frontend /mon-compte without cookie redirects to /connexion?returnTo=/mon-compte",
+    "Frontend /commander/{productId} without cookie redirects to /connexion?returnTo=%2Fcommander%2F{productId}",
+    "Frontend /mes-commandes remains public (no redirect) for phone/order_number lookup",
+    "Frontend /mon-compte with injected cookie: shows 'Client Test' + 'client@test.com', KPI cards (Commandes, En attente, Acceptées, Total dépensé), colored status badges (REJETÉE / EN ATTENTE), filter buttons (Toutes, En attente, Acceptée, Terminée, Refusée), and 'Déconnexion' button",
+    "Frontend Checkout with cookie: email input pre-filled with 'client@test.com' and marked readonly (attribute present); page shows 'Connecté en tant que client@test.com'"
+  ],
+  "failed": [
+    {
+      "area": "backend / POST /api/orders (persisting bug from iteration_1)",
+      "issue": "Endpoint still returns HTTP 500 'Internal Server Error' after inserting the order. Root cause unchanged: create_order returns `doc` after `await db.orders.insert_one(doc)` which mutates the dict with `_id: ObjectId`, and FastAPI cannot serialize it. Now this bug directly blocks the customer checkout UX because Checkout.jsx expects the order_number from the response to redirect to /confirmation/{order_number}.",
+      "evidence": "curl POST /api/orders with valid customer cookie -> HTTP 500 body 'Internal Server Error'. GET /api/customer/orders immediately after returns the order FT-F3893C83 status=pending total=479.4 customer_email=client@test.com. Fix from previous iteration was NOT applied.",
+      "priority": "HIGH"
+    }
+  ],
+  "action_items": [
+    "Apply the fix suggested in iteration_1: in /app/backend/server.py create_order (~line 443), either `doc.pop('_id', None)` before `return doc`, or return `order.model_dump()` (built before insert). Same defensive pattern should be reviewed for any other endpoint returning a doc directly after insert_one/update_one."
+  ],
+  "success_rate": {"backend": "95% (only POST /api/orders 500 persists)", "frontend": "100%"},
+  "retest_needed": true,
+  "full_testing_deferred": true
+}

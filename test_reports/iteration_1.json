@@ -1,0 +1,34 @@
+{
+  "summary": "First-finish smoke test. Backend public endpoints, auth session injection, admin CRUD, settings, order approve/reject/complete, stats, admins allowlist all working. Frontend home + admin login pages load correctly with 7 categories and hero. One HIGH severity blocker found: POST /api/orders returns 500 even though the order is persisted — response cannot be serialized due to MongoDB ObjectId injection into the doc after insert_one. This breaks the entire client checkout flow (Checkout.jsx will not receive the created order and cannot redirect to /confirmation/{order_number}).",
+  "tested_scope": ["backend", "frontend", "auth", "integration"],
+  "passed": [
+    "GET /api/ -> {status: ok}",
+    "GET /api/categories returns 7 seeded categories (PUBG Mobile, Free Fire, eFootball, DLS, FC Mobile, CapCut Pro, Autres)",
+    "GET /api/settings/public returns margin_percent=10 and all default fields",
+    "GET /api/auth/me without cookie returns 401; with injected Bearer token returns super_admin torrepablo7040@gmail.com",
+    "POST /api/admin/products creates product; GET /api/products returns price = base_price * (1 + margin/100) [100 -> 110 at 10%]",
+    "PUT /api/admin/settings persists margin_percent, moncash_number/beneficiary, natcash_number/beneficiary",
+    "Order (created despite 500 response) carries payment_beneficiary_name/payment_receiver_number from settings and total_amount = unit_price * qty (110 * 2 = 220 correct)",
+    "GET /api/orders/lookup?q=<phone> returns matching orders",
+    "POST /api/admin/orders/{id}/approve|reject|complete correctly transitions status; reject stores rejection_reason",
+    "GET /api/admin/stats returns total_orders, pending, approved, rejected, completed, revenue, products, customers",
+    "GET /api/admin/admins works for super_admin (returns list)",
+    "DELETE /api/admin/products/{id} works",
+    "Frontend home page renders hero + all 7 categories + navigation",
+    "Frontend /admin/login renders 'Se connecter avec Google' button"
+  ],
+  "failed": [
+    {
+      "area": "backend / POST /api/orders",
+      "issue": "Endpoint returns HTTP 500 'Internal Server Error' although the order IS inserted in MongoDB. Root cause: after `await db.orders.insert_one(doc)` in create_order (server.py ~line 408), motor mutates `doc` in-place by adding `_id: ObjectId`. FastAPI then tries to serialize `doc` and fails with: ValueError: [TypeError(\"'ObjectId' object is not iterable\"), TypeError('vars() argument must have __dict__ attribute')]. This blocks the customer checkout redirect to /confirmation/{order_number}.",
+      "evidence": "Backend log: 'POST /api/orders HTTP/1.1 500 Internal Server Error'. Traceback in /var/log/supervisor/backend.err.log ends with 'ValueError: [TypeError(\"ObjectId object is not iterable\"), TypeError(vars() argument must have __dict__ attribute)]'. Confirmed via curl: response body 'Internal Server Error' with HTTP 500, then GET /api/orders/lookup returns the persisted order (order_number FT-XXXXXXXX, status=pending, total=220, unit=110).",
+      "priority": "HIGH"
+    }
+  ],
+  "action_items": [
+    "Fix create_order in /app/backend/server.py: return `order.model_dump()` (built before insert) instead of the mutated `doc`, OR explicitly strip `_id` after insert (e.g. `doc.pop('_id', None)` before returning). Same defensive pattern should be considered for any other endpoint that returns a doc right after insert_one."
+  ],
+  "success_rate": {"backend": "92%", "frontend": "100% (smoke)"},
+  "retest_needed": true,
+  "full_testing_deferred": true
+}

@@ -1,0 +1,143 @@
+{
+  "responsive": {
+    "breakpoint": "mobile-first — designed for Android mobile web first (360px-430px screens), scaling up seamlessly to tablet and desktop",
+    "layout": "Single column vertical stacks on mobile with touch-friendly 48px+ tap targets. Horizontal scroll pills for categories/packages. Multi-column bento grids on md:grid-cols-2 lg:grid-cols-3 and xl:grid-cols-4. Mobile sticky bottom bar for quick buy & cart actions.",
+    "typography": "Fluid scaling with mobile base 14px-16px, H1 text-3xl sm:text-4xl lg:text-5xl, H2 text-xl sm:text-2xl lg:text-3xl. High contrast text against dark obsidian background (#0A0C10). Inputs styled at 16px minimum on mobile to prevent automatic iOS/Android Safari auto-zoom.",
+    "overflow_guard": "All grid and flex items constrained with min-w-0 and overflow-hidden where required to eliminate unintended horizontal scrollbars.",
+    "tap_targets": "Buttons, tabs, package selectors, and input controls have minimum touch height of 48px with generous spacing and optical alignment."
+  },
+  "typography": {
+    "heading_font": "Unbounded, sans-serif (Google Font for punchy cyberpunk gaming feel)",
+    "body_font": "Inter, system-ui, sans-serif (Clean legibility for prices, instructions and transaction forms)",
+    "accent_font": "JetBrains Mono, monospace (For Transaction IDs, Order Numbers, and HTG Currency display)",
+    "hierarchy": {
+      "h1": "text-3xl sm:text-4xl lg:text-5xl font-extrabold tracking-tight uppercase",
+      "h2": "text-xl sm:text-2xl lg:text-3xl font-bold tracking-tight",
+      "h3": "text-lg sm:text-xl font-semibold",
+      "body": "text-sm sm:text-base font-normal leading-relaxed text-slate-300",
+      "badge": "text-xs font-mono font-bold uppercase tracking-wider px-2.5 py-1 rounded-full"
+    }
+  },
+  "colors": {
+    "theme": "Dark Esports & Tactical Gaming (Obsidian + Cyber Cyan + Haitian MonCash Amber + NatCash Crimson)",
+    "background": {
+      "main": "#0A0C10",
+      "surface": "#121620",
+      "card": "#181D2A",
+      "card_hover": "#202738",
+      "glass": "rgba(18, 22, 32, 0.85)"
+    },
+    "brand": {
+      "primary": "#00F0FF",
+      "primary_hover": "#00D8E6",
+      "moncash_amber": "#FF8C00",
+      "natcash_crimson": "#E60028",
+      "accent_purple": "#7B2CBF"
+    },
+    "text": {
+      "primary": "#F8FAFC",
+      "secondary": "#94A3B8",
+      "muted": "#64748B",
+      "accent": "#00F0FF"
+    },
+    "status": {
+      "pending": "#F59E0B",
+      "approved": "#10B981",
+      "rejected": "#EF4444",
+      "completed": "#3B82F6"
+    },
+    "borders": {
+      "default": "rgba(255, 255, 255, 0.1)",
+      "active": "rgba(0, 240, 255, 0.4)",
+      "glow": "0 0 15px rgba(0, 240, 255, 0.2)"
+    }
+  },
+  "visual_enhancers": {
+    "card_style": "Tactical gaming card with subtle 1px border border-slate-800 hover:border-cyan-500/50 transition-all duration-300 rounded-xl bg-slate-900/80 backdrop-blur-md shadow-xl hover:shadow-cyan-500/10",
+    "glowing_effects": "Neon cyan accents for CTAs, orange glow for MonCash payment option, crimson glow for NatCash payment option.",
+    "badges": "Live status indicators with pulse animation for 'En attente' (yellow), 'Approuvée' (green), 'Terminée' (blue), and 'Rejetée' (red).",
+    "textures": "Subtle gaming grid mesh background pattern with soft radial ambient light gradients."
+  },
+  "layout_and_grids": {
+    "mode": "Tetris & Bento Grid hybrid for catalog and promo banners. Tight high-density grid for Admin Dashboard metrics.",
+    "hero_section": "Asymmetric hero with announcement marquee (Taux HTG live, MonCash/NatCash status) + interactive banner slider featuring PUBG, Free Fire, eFootball, and CapCut Pro.",
+    "product_grid": "grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-6",
+    "dashboard_grid": "grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4"
+  },
+  "components": {
+    "header": {
+      "style": "Sticky top bar with glassmorphism backdrop-blur-xl bg-slate-950/80 border-b border-slate-800/80 z-50",
+      "elements": [
+        "FLASH-Topup logo with glowing⚡ lightning badge",
+        "Navigation: Accueil, Produits, Catégories, Suivi Commande, Admin",
+        "Currency indicator: HTG (Marge 10% incluse)",
+        "Quick 'Mes Commandes' search modal trigger button"
+      ]
+    },
+    "marquee": {
+      "content": "⚡ FLASH-Topup: Livraison ultra-rapide en 2-5 minutes | 💳 Paiement facile par MonCash & NatCash | 🎮 DLS 2026, eFootball, PUBG Mobile UC, Free Fire Diamonds & CapCut Pro disponibles!",
+      "style": "bg-cyan-950/60 border-y border-cyan-500/20 text-cyan-300 text-xs py-2 font-mono"
+    },
+    "product_card": {
+      "elements": [
+        "Product badge (Category, e.g. PUBG / Free Fire / DLS / CapCut)",
+        "High-res product cover / thumbnail",
+        "Title & Instant delivery badge (< 5 min)",
+        "Price in HTG (Gourdes haïtiennes)",
+        "Action button: 'Recharger' with hover glow"
+      ]
+    },
+    "order_modal_checkout": {
+      "steps": [
+        "1. Sélection du package (Ex: 660 UC, 310 Diamonds, Pass CapCut Pro 1 Mois)",
+        "2. Identifiant Joueur / ID de Compte (avec bouton aide / screenshot)",
+        "3. Mode de paiement (MonCash vs NatCash) avec numéro de transfert et nom du bénéficiaire",
+        "4. Upload de preuve de paiement (Capture d'écran / Photo) + Numéro de Transaction ID",
+        "5. Bouton 'Valider la commande' avec confirmation instantanée"
+      ]
+    },
+    "order_tracking": {
+      "features": [
+        "Lookup by Order ID (#FT-XXXXX) or Phone Number",
+        "Visual timeline: Reçue -> En vérification -> Approuvée -> Livrée",
+        "WhatsApp Direct Link button for expedited support if order is pending",
+        "Rejection details modal if status is Rejetée with easy resubmit"
+      ]
+    },
+    "admin_dashboard": {
+      "sections": [
+        "Google OAuth Login with Emergent Auth integration & role verification",
+        "KPI Cards: Chiffre d'Affaires HTG, Commandes En Attente, Approuvées, Rejetées, Livrées",
+        "Gestionnaire de Commandes: Table interactif avec aperçu de la preuve de paiement, bouton 1-click Approuver / Rejeter / Terminer",
+        "CRUD Produits & Marges: Modifier le prix de base HTG, ajuster le % de marge (ex: 10%), upload d'images",
+        "Paramètres système: Numéros MonCash & NatCash, nom du bénéficiaire, bannières d'accueil, texte d'annonce",
+        "Allowlist Administrateurs: Ajouter/Supprimer des admins par email Google avec rôle Admin ou Super Admin"
+      ]
+    }
+  },
+  "image_urls": {
+    "hero_banner": "https://images.unsplash.com/photo-1564049489314-60d154ff107d?crop=entropy&cs=srgb&fm=jpg&q=85",
+    "pubg_mobile": "https://images.unsplash.com/photo-1564049489314-60d154ff107d?crop=entropy&cs=srgb&fm=jpg&q=85",
+    "free_fire": "https://images.unsplash.com/photo-1655802895804-60db735c791b?crop=entropy&cs=srgb&fm=jpg&q=85",
+    "efootball_soccer": "https://images.unsplash.com/photo-1546443046-ed1ce6ffd1ab?crop=entropy&cs=srgb&fm=jpg&q=85",
+    "fc_mobile": "https://images.unsplash.com/photo-1685914960983-8ddf0b372e59?crop=entropy&cs=srgb&fm=jpg&q=85",
+    "dls_2026": "https://images.unsplash.com/photo-1623934199716-dc28818a6ec7?crop=entropy&cs=srgb&fm=jpg&q=85",
+    "capcut_pro": "https://images.unsplash.com/photo-1655802906408-0ed1bc38a6dd?crop=entropy&cs=srgb&fm=jpg&q=85",
+    "gaming_neon": "https://images.unsplash.com/photo-1665142726875-f931a29dcee3?crop=entropy&cs=srgb&fm=jpg&q=85"
+  },
+  "instructions_to_main_agent": [
+    "Build the frontend with high visual polish tailored for the Haitian Android gaming audience.",
+    "Prices must be formatted clearly in HTG (Gourdes haïtiennes, e.g., '1,250 HTG'). Include 10% default profit margin calculation clearly in backend/frontend math.",
+    "Implement MonCash and NatCash payment flow with copy-to-clipboard phone numbers, beneficiary name, transaction reference field, and proof image uploader preview.",
+    "Ensure all order status badges are clearly color coded: 🟡 En attente (yellow), 🟢 Approuvée (green), 🔴 Rejetée (red), 🔵 Terminée (blue).",
+    "Implement complete Order Lookup (Mes commandes / Suivi) by Order ID or Phone number with clear step-by-step progress status.",
+    "Implement full Admin Dashboard with Google OAuth authentication, KPI stats, Order approval modal with proof viewer, Product CRUD with margin percentage editor, Payment Settings editor, and Admin Allowlist manager.",
+    "Add data-testid attributes on all interactive elements (buttons, inputs, tabs, filter pills, order status items, admin controls)."
+  ],
+  "UNIVERSAL GUIDELINES FOR MAIN AGENT": [
+    "Never use generic white backgrounds or plain centered Bootstrap styling.",
+    "Maintain high dark mode contrast with dark obsidian surfaces (#0A0C10) and vibrant cyan/amber/crimson glowing indicators.",
+    "Micro-animations on hover for all product cards, payment choice cards, and primary action buttons.",
+    "Include clear data-testid tags on all interactive elements for test verification."
+  ]
+}
