@@ -32,7 +32,17 @@ export default function Checkout() {
     payment_method: "moncash",
     proof_image_url: "",
     transaction_id: "",
+    coupon_code: "",
+    redeem_points: 0,
   });
+  const [couponValid, setCouponValid] = useState(null);
+  const [loyalty, setLoyalty] = useState(null);
+  useEffect(() => { api.get("/customer/loyalty").then((r) => setLoyalty(r.data)).catch(() => {}); }, [customer]);
+  const applyCoupon = async () => {
+    if (!form.coupon_code) return;
+    try { const r = await api.get(`/coupons/validate?code=${encodeURIComponent(form.coupon_code)}`); setCouponValid(r.data); toast.success(`Coupon ${r.data.code} appliqué`); }
+    catch (e) { setCouponValid(null); toast.error(e.response?.data?.detail || "Coupon invalide"); }
+  };
 
   useEffect(() => {
     if (customer) setForm((f) => ({ ...f, customer_name: f.customer_name || customer.name || "", customer_email: customer.email }));
@@ -107,6 +117,8 @@ export default function Checkout() {
         payment_method: form.payment_method,
         proof_image_url: form.proof_image_url,
         transaction_id: form.transaction_id,
+        coupon_code: form.coupon_code || null,
+        redeem_points: Number(form.redeem_points) || 0,
       });
       navigate(`/confirmation/${r.data.order_number}`);
     } catch (e) {
@@ -228,8 +240,18 @@ export default function Checkout() {
           )}
         </div>
 
-        <div className="cyber-card rounded-2xl p-5 h-fit">
+        <div className="cyber-card rounded-2xl p-5 h-fit space-y-3">
           <div className="text-xs uppercase text-slate-400 font-mono-a">Récapitulatif</div>
+          <div className="flex gap-2 items-center">
+            <input data-testid="co-coupon" placeholder="Code coupon" className="input flex-1" value={form.coupon_code} onChange={(e) => set("coupon_code", e.target.value.toUpperCase())}/>
+            <button type="button" onClick={applyCoupon} className="px-3 py-2 rounded-full bg-[#00F0FF]/10 border border-[#00F0FF]/30 text-[#00F0FF] text-xs font-semibold">Appliquer</button>
+          </div>
+          {couponValid && <div className="text-xs text-emerald-300">✓ {couponValid.discount_percent}% de réduction</div>}
+          {loyalty?.points > 0 && (
+            <label className="block text-xs text-slate-400">Utiliser des points ({loyalty.points} dispo)
+              <input data-testid="co-points" type="number" className="input mt-1" value={form.redeem_points} onChange={(e) => set("redeem_points", e.target.value)} max={loyalty.points}/>
+            </label>
+          )}
           <div className="mt-3 flex items-center gap-3">
             <div className="w-16 h-16 rounded-xl overflow-hidden bg-white/5">
               {product.image_url && <img src={product.image_url} alt={product.name} className="w-full h-full object-cover"/>}

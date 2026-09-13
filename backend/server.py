@@ -133,6 +133,8 @@ class OrderIn(BaseModel):
     payment_method: str
     proof_image_url: str
     transaction_id: str
+    coupon_code: Optional[str] = None
+    redeem_points: int = 0
 
 class AdminUser(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
@@ -413,7 +415,32 @@ async def create_order(body: OrderIn, request: Request):
     s = await get_settings()
     unit_price = round(float(product["base_price"]) * (1 + float(s["margin_percent"]) / 100), 2)
     qty = max(1, int(body.quantity))
-    total = round(unit_price * qty, 2)
+    subtotal = round(unit_price * qty, 2)
+    total = subtotal
+    discount = 0.0
+    loyalty = await get_loyalty()
+    # Reseller discount
+    cust_doc = await db.customers.find_one({"email": customer.email}, {"_id": 0}) or {}
+    if cust_doc.get("is_reseller"):
+        discount += subtotal * float(loyalty["reseller_discount_percent"]) / 100
+    # Coupon
+    coupon = None
+    if body.coupon_code:
+        coupon = await db.coupons.find_one({"code": body.coupon_code.upper().strip(), "active": True}, {"_id": 0})
+        if coupon:
+            if coupon.get("max_uses", 0) > 0 and coupon.get("uses", 0) >= coupon["max_uses"]:
+                raise HTTPException(400, "Coupon épuisé")
+            discount += subtotal * float(coupon.get("discount_percent", 0)) / 100
+            discount += float(coupon.get("discount_amount", 0))
+    # Loyalty redeem
+    redeem_amount = 0.0
+    if loyalty.get("active") and body.redeem_points and body.redeem_points > 0:
+        avail = cust_doc.get("loyalty_points", 0)
+        pts = min(body.redeem_points, avail)
+        if pts >= loyalty["min_redeem_points"]:
+            redeem_amount = pts * float(loyalty["htg_per_point"])
+            discount += redeem_amount
+    total = max(0, round(subtotal - discount, 2))
     if body.payment_method == "moncash":
         ben_name = s["moncash_beneficiary"]
         ben_num = s["moncash_number"]
@@ -454,8 +481,18 @@ async def create_order(body: OrderIn, request: Request):
         raise HTTPException(400, "Numéro de téléphone invalide")
     doc = order.model_dump()
     doc["customer_id"] = customer.id
+    doc["subtotal"] = subtotal
+    doc["discount"] = round(discount, 2)
+    doc["coupon_code"] = coupon["code"] if coupon else None
+    doc["redeemed_points"] = int(body.redeem_points) if redeem_amount > 0 else 0
     await db.orders.insert_one(doc)
     doc.pop("_id", None)
+    # Apply loyalty & coupon side effects
+    if coupon:
+        await db.coupons.update_one({"id": coupon["id"]}, {"$inc": {"uses": 1}})
+    earned = int(subtotal * float(loyalty.get("points_per_htg", 0)))
+    inc = {"loyalty_points": earned - doc["redeemed_points"]}
+    await db.customers.update_one({"email": customer.email}, {"$inc": inc})
     return doc
 
 # ---------------------- Customer auth routes ----------------------
@@ -481,7 +518,11 @@ async def customer_auth_session(request: Request, response: Response):
     existing = await db.customers.find_one({"email": email})
     if not existing:
         c = Customer(email=email, name=data.get("name"), picture=data.get("picture"))
-        await db.customers.insert_one(c.model_dump())
+        loy = await get_loyalty()
+        doc = c.model_dump()
+        doc["loyalty_points"] = int(loy.get("welcome_points", 0))
+        doc["is_reseller"] = False
+        await db.customers.insert_one(doc)
     else:
         await db.customers.update_one(
             {"email": email},
@@ -846,6 +887,196 @@ async def admin_remove_admin(admin_id: str, request: Request):
         raise HTTPException(400, "Vous ne pouvez pas vous supprimer vous-même")
     await db.admins.delete_one({"id": admin_id})
     return {"ok": True}
+
+# ---------------------- Subscriptions ----------------------
+class Subscription(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    name: str
+    description: str = ""
+    image_url: str = ""
+    base_price: float
+    duration_days: int = 30
+    features: List[str] = []
+    active: bool = True
+    created_at: str = Field(default_factory=now_iso)
+
+class SubscriptionIn(BaseModel):
+    name: str
+    description: str = ""
+    image_url: str = ""
+    base_price: float
+    duration_days: int = 30
+    features: List[str] = []
+    active: bool = True
+
+@api_router.get("/subscriptions")
+async def list_subscriptions():
+    items = await db.subscriptions.find({"active": True}, {"_id": 0}).to_list(200)
+    s = await get_settings()
+    m = float(s["margin_percent"])
+    for it in items:
+        it["price"] = round(float(it["base_price"]) * (1 + m/100), 2)
+    return items
+
+@api_router.get("/admin/subscriptions")
+async def admin_list_subs(request: Request):
+    await current_admin(request)
+    return await db.subscriptions.find({}, {"_id": 0}).to_list(200)
+
+@api_router.post("/admin/subscriptions")
+async def admin_create_sub(body: SubscriptionIn, request: Request):
+    a = await current_admin(request)
+    s = Subscription(**body.model_dump())
+    await db.subscriptions.insert_one(s.model_dump())
+    await log_admin_action(a.email, "create_subscription", s.name)
+    return s.model_dump()
+
+@api_router.put("/admin/subscriptions/{sid}")
+async def admin_update_sub(sid: str, body: SubscriptionIn, request: Request):
+    a = await current_admin(request)
+    await db.subscriptions.update_one({"id": sid}, {"$set": body.model_dump()})
+    await log_admin_action(a.email, "update_subscription", sid)
+    return await db.subscriptions.find_one({"id": sid}, {"_id": 0})
+
+@api_router.delete("/admin/subscriptions/{sid}")
+async def admin_delete_sub(sid: str, request: Request):
+    a = await current_admin(request)
+    await db.subscriptions.delete_one({"id": sid})
+    await log_admin_action(a.email, "delete_subscription", sid)
+    return {"ok": True}
+
+# ---------------------- Coupons ----------------------
+class Coupon(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    code: str
+    discount_percent: float = 0
+    discount_amount: float = 0
+    active: bool = True
+    max_uses: int = 0  # 0 = illimité
+    uses: int = 0
+    expires_at: Optional[str] = None
+    created_at: str = Field(default_factory=now_iso)
+
+class CouponIn(BaseModel):
+    code: str
+    discount_percent: float = 0
+    discount_amount: float = 0
+    active: bool = True
+    max_uses: int = 0
+    expires_at: Optional[str] = None
+
+@api_router.get("/coupons/validate")
+async def validate_coupon(code: str):
+    c = await db.coupons.find_one({"code": code.upper().strip(), "active": True}, {"_id": 0})
+    if not c:
+        raise HTTPException(404, "Coupon invalide")
+    if c.get("max_uses", 0) > 0 and c.get("uses", 0) >= c["max_uses"]:
+        raise HTTPException(400, "Coupon épuisé")
+    if c.get("expires_at"):
+        try:
+            exp = datetime.fromisoformat(c["expires_at"])
+            if exp.tzinfo is None: exp = exp.replace(tzinfo=timezone.utc)
+            if exp < datetime.now(timezone.utc): raise HTTPException(400, "Coupon expiré")
+        except (ValueError, TypeError): pass
+    return c
+
+@api_router.get("/admin/coupons")
+async def admin_coupons(request: Request):
+    await current_admin(request)
+    return await db.coupons.find({}, {"_id": 0}).to_list(500)
+
+@api_router.post("/admin/coupons")
+async def admin_create_coupon(body: CouponIn, request: Request):
+    a = await current_admin(request)
+    body_dict = body.model_dump()
+    body_dict["code"] = body_dict["code"].upper().strip()
+    c = Coupon(**body_dict)
+    await db.coupons.insert_one(c.model_dump())
+    await log_admin_action(a.email, "create_coupon", c.code)
+    return c.model_dump()
+
+@api_router.put("/admin/coupons/{cid}")
+async def admin_update_coupon(cid: str, body: CouponIn, request: Request):
+    a = await current_admin(request)
+    body_dict = body.model_dump()
+    body_dict["code"] = body_dict["code"].upper().strip()
+    await db.coupons.update_one({"id": cid}, {"$set": body_dict})
+    await log_admin_action(a.email, "update_coupon", cid)
+    return await db.coupons.find_one({"id": cid}, {"_id": 0})
+
+@api_router.delete("/admin/coupons/{cid}")
+async def admin_delete_coupon(cid: str, request: Request):
+    a = await current_admin(request)
+    await db.coupons.delete_one({"id": cid})
+    await log_admin_action(a.email, "delete_coupon", cid)
+    return {"ok": True}
+
+# ---------------------- Loyalty & Reseller ----------------------
+DEFAULT_LOYALTY = {
+    "id": "singleton",
+    "active": True,
+    "points_per_htg": 0.01,  # 1 point / 100 HTG
+    "htg_per_point": 1.0,  # 1 point = 1 HTG discount
+    "min_redeem_points": 100,
+    "reseller_discount_percent": 15.0,
+    "reseller_commission_percent": 10.0,
+    "welcome_points": 50,
+}
+
+async def get_loyalty():
+    l = await db.loyalty.find_one({"id": "singleton"}, {"_id": 0})
+    if not l:
+        await db.loyalty.insert_one({**DEFAULT_LOYALTY})
+        return dict(DEFAULT_LOYALTY)
+    return {**DEFAULT_LOYALTY, **l}
+
+class LoyaltyIn(BaseModel):
+    active: Optional[bool] = None
+    points_per_htg: Optional[float] = None
+    htg_per_point: Optional[float] = None
+    min_redeem_points: Optional[int] = None
+    reseller_discount_percent: Optional[float] = None
+    reseller_commission_percent: Optional[float] = None
+    welcome_points: Optional[int] = None
+
+@api_router.get("/loyalty/config")
+async def public_loyalty():
+    l = await get_loyalty()
+    return {k: l[k] for k in ["active", "points_per_htg", "htg_per_point", "min_redeem_points", "welcome_points"]}
+
+@api_router.get("/admin/loyalty")
+async def admin_loyalty(request: Request):
+    await current_admin(request)
+    return await get_loyalty()
+
+@api_router.put("/admin/loyalty")
+async def admin_update_loyalty(body: LoyaltyIn, request: Request):
+    a = await current_admin(request)
+    patch = {k: v for k, v in body.model_dump().items() if v is not None}
+    await db.loyalty.update_one({"id": "singleton"}, {"$set": patch}, upsert=True)
+    await log_admin_action(a.email, "update_loyalty", "config", {"keys": list(patch.keys())})
+    return await get_loyalty()
+
+@api_router.get("/customer/loyalty")
+async def customer_loyalty(request: Request):
+    c = await current_customer(request)
+    doc = await db.customers.find_one({"email": c.email}, {"_id": 0})
+    return {"points": doc.get("loyalty_points", 0), "is_reseller": doc.get("is_reseller", False)}
+
+class ResellerToggle(BaseModel):
+    is_reseller: bool
+
+@api_router.post("/admin/customers/{email}/reseller")
+async def admin_toggle_reseller(email: str, body: ResellerToggle, request: Request):
+    a = await current_admin(request)
+    await db.customers.update_one({"email": email.lower()}, {"$set": {"is_reseller": body.is_reseller}}, upsert=False)
+    await log_admin_action(a.email, "toggle_reseller", email, {"is_reseller": body.is_reseller})
+    return {"ok": True}
+
+@api_router.get("/admin/resellers")
+async def admin_list_resellers(request: Request):
+    await current_admin(request)
+    return await db.customers.find({"is_reseller": True}, {"_id": 0}).to_list(500)
 
 # ---------------------- Admin: Stats ----------------------
 @api_router.get("/admin/stats")

@@ -4,7 +4,7 @@ import { api, BACKEND_URL } from "@/lib/api";
 import { formatHTG, STATUS_LABEL, formatDate } from "@/lib/format";
 import { useAuth } from "@/context/AuthContext";
 import { toast } from "sonner";
-import { Loader2, LogOut, Package, ShoppingBag, Users, Settings, Image as ImageIcon, Shield, Layers, DollarSign, Plus, Trash2, Edit2, Check, X, Upload, Copy, Eye, Activity, Mail } from "lucide-react";
+import { Loader2, LogOut, Package, ShoppingBag, Users, Settings, Image as ImageIcon, Shield, Layers, DollarSign, Plus, Trash2, Edit2, Check, X, Upload, Copy, Eye, Activity, Mail, Ticket, Star, Award, Zap } from "lucide-react";
 
 const TABS = [
   { id: "overview", label: "Aperçu", icon: DollarSign },
@@ -12,6 +12,10 @@ const TABS = [
   { id: "products", label: "Produits", icon: Package },
   { id: "categories", label: "Catégories", icon: Layers },
   { id: "banners", label: "Bannières", icon: ImageIcon },
+  { id: "subscriptions", label: "Abonnements", icon: Zap },
+  { id: "coupons", label: "Coupons", icon: Ticket },
+  { id: "loyalty", label: "Fidélité", icon: Star },
+  { id: "resellers", label: "Revendeurs", icon: Award },
   { id: "payments", label: "Paiements", icon: Settings },
   { id: "customers", label: "Clients", icon: Users },
   { id: "messages", label: "Messages", icon: Mail },
@@ -72,6 +76,10 @@ export default function AdminDashboard() {
       {tab === "products" && <Products/>}
       {tab === "categories" && <Categories/>}
       {tab === "banners" && <Banners/>}
+      {tab === "subscriptions" && <Subscriptions/>}
+      {tab === "coupons" && <Coupons/>}
+      {tab === "loyalty" && <Loyalty/>}
+      {tab === "resellers" && <Resellers/>}
       {tab === "payments" && <Payments/>}
       {tab === "customers" && <Customers/>}
       {tab === "messages" && <Messages/>}
@@ -578,6 +586,193 @@ function Admins({ me }) {
                 <td className="p-3">
                   {a.email !== me.email && <button onClick={() => del(a)} className="p-1.5 rounded bg-red-500/20 text-red-300"><Trash2 className="w-3.5 h-3.5"/></button>}
                 </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <InputStyles/>
+    </div>
+  );
+}
+
+// ------ SUBSCRIPTIONS
+function Subscriptions() {
+  const [items, setItems] = useState([]);
+  const [editing, setEditing] = useState(null);
+  const empty = { name: "", description: "", image_url: "", base_price: 0, duration_days: 30, features: [], active: true };
+  const [form, setForm] = useState(empty);
+  const load = () => api.get("/admin/subscriptions").then((r) => setItems(r.data));
+  useEffect(() => { load(); }, []);
+  const save = async () => {
+    if (!form.name || !form.base_price) return toast.error("Nom & prix requis");
+    const payload = { ...form, base_price: Number(form.base_price), duration_days: Number(form.duration_days), features: (form.features_text || "").split("\n").filter(Boolean) };
+    delete payload.features_text;
+    if (editing === "new") await api.post("/admin/subscriptions", payload);
+    else await api.put(`/admin/subscriptions/${editing}`, payload);
+    toast.success("Enregistré"); setEditing(null); load();
+  };
+  const del = async (s) => { if (window.confirm(`Supprimer ${s.name} ?`)) { await api.delete(`/admin/subscriptions/${s.id}`); load(); }};
+  return (
+    <div>
+      <div className="flex justify-end mb-4"><button data-testid="new-sub" onClick={() => { setEditing("new"); setForm({ ...empty, features_text: "" }); }} className="btn-primary inline-flex items-center gap-2"><Plus className="w-4 h-4"/> Nouvel abonnement</button></div>
+      <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+        {items.map((s) => (
+          <div key={s.id} className="cyber-card rounded-2xl p-4">
+            <div className="flex justify-between"><div className="font-semibold">{s.name}</div><span className={`pill ${s.active ? "status-approved" : "status-rejected"}`}>{s.active ? "Actif" : "Inactif"}</span></div>
+            <div className="text-xs text-slate-400 mt-1">{s.duration_days} jours</div>
+            <div className="font-mono-a text-[#00F0FF] mt-2">{formatHTG(s.base_price)}</div>
+            <ul className="text-xs text-slate-400 mt-2 list-disc pl-4">{(s.features || []).slice(0, 4).map((f, i) => <li key={i}>{f}</li>)}</ul>
+            <div className="mt-3 flex gap-1"><button onClick={() => { setEditing(s.id); setForm({ ...s, features_text: (s.features || []).join("\n") }); }} className="p-1.5 rounded bg-white/5"><Edit2 className="w-3.5 h-3.5"/></button><button onClick={() => del(s)} className="p-1.5 rounded bg-red-500/20 text-red-300"><Trash2 className="w-3.5 h-3.5"/></button></div>
+          </div>
+        ))}
+      </div>
+      {editing && (
+        <Modal onClose={() => setEditing(null)} title="Abonnement">
+          <div className="space-y-3">
+            <label className="block text-xs text-slate-400">Nom<input className="input mt-1" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })}/></label>
+            <label className="block text-xs text-slate-400">Description<textarea className="input mt-1" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })}/></label>
+            <div className="grid sm:grid-cols-2 gap-3">
+              <label className="block text-xs text-slate-400">Prix HTG<input type="number" className="input mt-1" value={form.base_price} onChange={(e) => setForm({ ...form, base_price: e.target.value })}/></label>
+              <label className="block text-xs text-slate-400">Durée (jours)<input type="number" className="input mt-1" value={form.duration_days} onChange={(e) => setForm({ ...form, duration_days: e.target.value })}/></label>
+            </div>
+            <label className="block text-xs text-slate-400">Image URL<input className="input mt-1" value={form.image_url} onChange={(e) => setForm({ ...form, image_url: e.target.value })}/></label>
+            <label className="block text-xs text-slate-400">Fonctionnalités (1 par ligne)<textarea className="input mt-1 min-h-24" value={form.features_text || ""} onChange={(e) => setForm({ ...form, features_text: e.target.value })}/></label>
+            <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={form.active} onChange={(e) => setForm({ ...form, active: e.target.checked })}/> Actif</label>
+            <div className="flex justify-end gap-2"><button onClick={() => setEditing(null)} className="px-4 py-2 rounded-full border border-white/10 bg-white/5">Annuler</button><button onClick={save} className="btn-primary">Enregistrer</button></div>
+          </div>
+        </Modal>
+      )}
+      <InputStyles/>
+    </div>
+  );
+}
+
+// ------ COUPONS
+function Coupons() {
+  const [items, setItems] = useState([]);
+  const [editing, setEditing] = useState(null);
+  const empty = { code: "", discount_percent: 0, discount_amount: 0, active: true, max_uses: 0, expires_at: "" };
+  const [form, setForm] = useState(empty);
+  const load = () => api.get("/admin/coupons").then((r) => setItems(r.data));
+  useEffect(() => { load(); }, []);
+  const save = async () => {
+    if (!form.code) return toast.error("Code requis");
+    const payload = { ...form, discount_percent: Number(form.discount_percent), discount_amount: Number(form.discount_amount), max_uses: Number(form.max_uses), expires_at: form.expires_at || null };
+    if (editing === "new") await api.post("/admin/coupons", payload);
+    else await api.put(`/admin/coupons/${editing}`, payload);
+    toast.success("Enregistré"); setEditing(null); load();
+  };
+  const del = async (c) => { if (window.confirm(`Supprimer ${c.code} ?`)) { await api.delete(`/admin/coupons/${c.id}`); load(); }};
+  return (
+    <div>
+      <div className="flex justify-end mb-4"><button data-testid="new-coupon" onClick={() => { setEditing("new"); setForm(empty); }} className="btn-primary inline-flex items-center gap-2"><Plus className="w-4 h-4"/> Nouveau coupon</button></div>
+      <div className="cyber-card rounded-2xl overflow-x-auto thin-scroll">
+        <table className="w-full text-sm">
+          <thead className="bg-white/5 text-left text-xs uppercase text-slate-400"><tr><th className="p-3">Code</th><th className="p-3">Réduction</th><th className="p-3">Utilisations</th><th className="p-3">Statut</th><th className="p-3">Actions</th></tr></thead>
+          <tbody>
+            {items.map((c) => (
+              <tr key={c.id} className="border-t border-white/5">
+                <td className="p-3 font-mono-a text-[#00F0FF]">{c.code}</td>
+                <td className="p-3">{c.discount_percent}% {c.discount_amount ? `+ ${c.discount_amount} HTG` : ""}</td>
+                <td className="p-3">{c.uses}/{c.max_uses || "∞"}</td>
+                <td className="p-3"><span className={`pill ${c.active ? "status-approved" : "status-rejected"}`}>{c.active ? "Actif" : "Inactif"}</span></td>
+                <td className="p-3 flex gap-1"><button onClick={() => { setEditing(c.id); setForm({ ...c, expires_at: c.expires_at || "" }); }} className="p-1.5 rounded bg-white/5"><Edit2 className="w-3.5 h-3.5"/></button><button onClick={() => del(c)} className="p-1.5 rounded bg-red-500/20 text-red-300"><Trash2 className="w-3.5 h-3.5"/></button></td>
+              </tr>
+            ))}
+            {items.length === 0 && <tr><td colSpan={5} className="p-8 text-center text-slate-400">Aucun coupon.</td></tr>}
+          </tbody>
+        </table>
+      </div>
+      {editing && (
+        <Modal onClose={() => setEditing(null)} title="Coupon">
+          <div className="space-y-3">
+            <label className="block text-xs text-slate-400">Code<input className="input mt-1" value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value.toUpperCase() })}/></label>
+            <div className="grid sm:grid-cols-2 gap-3">
+              <label className="block text-xs text-slate-400">Réduction %<input type="number" className="input mt-1" value={form.discount_percent} onChange={(e) => setForm({ ...form, discount_percent: e.target.value })}/></label>
+              <label className="block text-xs text-slate-400">Réduction HTG<input type="number" className="input mt-1" value={form.discount_amount} onChange={(e) => setForm({ ...form, discount_amount: e.target.value })}/></label>
+              <label className="block text-xs text-slate-400">Max utilisations (0=∞)<input type="number" className="input mt-1" value={form.max_uses} onChange={(e) => setForm({ ...form, max_uses: e.target.value })}/></label>
+              <label className="block text-xs text-slate-400">Expire le<input type="datetime-local" className="input mt-1" value={form.expires_at ? form.expires_at.slice(0, 16) : ""} onChange={(e) => setForm({ ...form, expires_at: e.target.value })}/></label>
+            </div>
+            <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={form.active} onChange={(e) => setForm({ ...form, active: e.target.checked })}/> Actif</label>
+            <div className="flex justify-end gap-2"><button onClick={() => setEditing(null)} className="px-4 py-2 rounded-full border border-white/10 bg-white/5">Annuler</button><button onClick={save} className="btn-primary">Enregistrer</button></div>
+          </div>
+        </Modal>
+      )}
+      <InputStyles/>
+    </div>
+  );
+}
+
+// ------ LOYALTY
+function Loyalty() {
+  const [l, setL] = useState(null);
+  useEffect(() => { api.get("/admin/loyalty").then((r) => setL(r.data)); }, []);
+  if (!l) return <div className="text-slate-400">Chargement…</div>;
+  const set = (k, v) => setL((x) => ({ ...x, [k]: v }));
+  const save = async () => {
+    await api.put("/admin/loyalty", {
+      active: l.active,
+      points_per_htg: Number(l.points_per_htg),
+      htg_per_point: Number(l.htg_per_point),
+      min_redeem_points: Number(l.min_redeem_points),
+      reseller_discount_percent: Number(l.reseller_discount_percent),
+      reseller_commission_percent: Number(l.reseller_commission_percent),
+      welcome_points: Number(l.welcome_points),
+    });
+    toast.success("Enregistré");
+  };
+  return (
+    <div className="grid lg:grid-cols-2 gap-4">
+      <div className="cyber-card rounded-2xl p-5 space-y-3">
+        <h3 className="font-display font-bold">Programme fidélité</h3>
+        <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={l.active} onChange={(e) => set("active", e.target.checked)}/> Programme activé</label>
+        <label className="block text-xs text-slate-400">Points gagnés par HTG dépensé<input type="number" step="0.01" className="input mt-1" value={l.points_per_htg} onChange={(e) => set("points_per_htg", e.target.value)}/></label>
+        <label className="block text-xs text-slate-400">HTG obtenus par point échangé<input type="number" step="0.01" className="input mt-1" value={l.htg_per_point} onChange={(e) => set("htg_per_point", e.target.value)}/></label>
+        <label className="block text-xs text-slate-400">Points minimum pour échanger<input type="number" className="input mt-1" value={l.min_redeem_points} onChange={(e) => set("min_redeem_points", e.target.value)}/></label>
+        <label className="block text-xs text-slate-400">Points de bienvenue<input type="number" className="input mt-1" value={l.welcome_points} onChange={(e) => set("welcome_points", e.target.value)}/></label>
+      </div>
+      <div className="cyber-card rounded-2xl p-5 space-y-3">
+        <h3 className="font-display font-bold">Programme Revendeur</h3>
+        <label className="block text-xs text-slate-400">Réduction revendeur (%)<input type="number" step="0.1" className="input mt-1" value={l.reseller_discount_percent} onChange={(e) => set("reseller_discount_percent", e.target.value)}/></label>
+        <label className="block text-xs text-slate-400">Commission revendeur (%)<input type="number" step="0.1" className="input mt-1" value={l.reseller_commission_percent} onChange={(e) => set("reseller_commission_percent", e.target.value)}/></label>
+        <div className="text-xs text-slate-400 mt-2">Les revendeurs bénéficient d'une réduction automatique sur chaque commande. Activez ce statut par client dans l'onglet Revendeurs.</div>
+      </div>
+      <div className="lg:col-span-2"><button data-testid="save-loyalty" onClick={save} className="btn-primary">Enregistrer les modifications</button></div>
+      <InputStyles/>
+    </div>
+  );
+}
+
+// ------ RESELLERS
+function Resellers() {
+  const [customers, setCustomers] = useState([]);
+  const [email, setEmail] = useState("");
+  const load = () => api.get("/admin/customers").then((r) => setCustomers(r.data));
+  useEffect(() => { load(); }, []);
+  const toggle = async (em, on) => {
+    await api.post(`/admin/customers/${encodeURIComponent(em)}/reseller`, { is_reseller: on });
+    toast.success(on ? "Promu revendeur" : "Retiré des revendeurs");
+    load();
+  };
+  const add = async () => { if (email) { await toggle(email.toLowerCase(), true); setEmail(""); }};
+  return (
+    <div>
+      <div className="cyber-card rounded-2xl p-4 mb-4 flex flex-col sm:flex-row gap-2">
+        <input data-testid="reseller-email" className="input flex-1" placeholder="email client à promouvoir" value={email} onChange={(e) => setEmail(e.target.value)}/>
+        <button data-testid="add-reseller" onClick={add} className="btn-primary">Ajouter</button>
+      </div>
+      <div className="cyber-card rounded-2xl overflow-x-auto thin-scroll">
+        <table className="w-full text-sm">
+          <thead className="bg-white/5 text-left text-xs uppercase text-slate-400"><tr><th className="p-3">Email</th><th className="p-3">Nom</th><th className="p-3">Commandes</th><th className="p-3">Total dépensé</th><th className="p-3">Action</th></tr></thead>
+          <tbody>
+            {customers.map((c) => (
+              <tr key={c.phone || c.email} className="border-t border-white/5">
+                <td className="p-3 font-mono-a">{c.email || "—"}</td>
+                <td className="p-3">{c.name}</td>
+                <td className="p-3">{c.orders_count}</td>
+                <td className="p-3 font-mono-a">{formatHTG(c.total_spent)}</td>
+                <td className="p-3">{c.email && <button onClick={() => toggle(c.email, true)} className="px-2 py-1 rounded bg-emerald-500/20 text-emerald-300 text-xs">Revendeur</button>}</td>
               </tr>
             ))}
           </tbody>
