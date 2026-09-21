@@ -1,0 +1,34 @@
+{
+  "summary": "Backend regression testing for POST /api/orders ObjectId serialization fix + full order lifecycle (create → approve → complete → logs). Seeded customer/customer_session (verify@test.com/vtok1) and admin_session (torrepablo7040@gmail.com/vadmintok1) directly in MongoDB (test_database). All 9 tests passed (9/9 = 100%).",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_orders_regression.py",
+    "/app/test_reports/pytest/orders_regression.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py is >1100 lines — should be split into routers (orders, admin, customer, settings) for maintainability.",
+    "Anti-duplicate transaction_id check happens AFTER building Order object but BEFORE insert — fine, but the 24h window mentioned in the code comment is not actually enforced (query has no time filter). Either enforce the 24h window or update comment.",
+    "current_customer/current_admin duplicate 90% of their logic — extract a shared _validate_session helper.",
+    "Loyalty point increment uses `earned - doc['redeemed_points']` which could go negative if redeem > earned; consider `$inc` on both fields separately or guard against negative net.",
+    "Order side-effects (coupon uses ++, loyalty inc) run AFTER the response is built but are not transactional with the order insert; a crash between insert and side-effects leaves inconsistent state."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_orders_regression.py"
+  ],
+  "success_rate": {"backend": "100%", "frontend": "not tested (backend-only run)"},
+  "test_credentials": "Injected in Mongo: customer verify@test.com / Bearer token 'vtok1'; admin torrepablo7040@gmail.com / Bearer token 'vadmintok1'. Sessions valid 7 days.",
+  "seed_data_creation": "Upserted 1 customer, 1 customer_session, 1 admin_session; teardown removes them and TEST_ orders after run.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Regression on POST /api/orders (500 → 200 due to ObjectId leak) is fully fixed via doc.pop('_id', None). Complete flow (create → GET /api/customer/orders → admin approve → admin complete → GET /api/admin/logs) verified. Test file /app/backend/tests/test_orders_regression.py reusable. NOTE: current settings.margin_percent is 2% in DB (not 10% default) — test dynamically reads from settings. Run with `-n 0` to keep class state serial.",
+  "rca of the issue": "Original 500: FastAPI attempted to JSON-serialize the doc returned from create_order, but Motor's insert_one mutates the passed dict to add a BSON ObjectId under '_id'. ObjectId is not JSON-serializable → 500. Fix applied by main agent (doc.pop('_id', None) after insert_one) confirmed working. All downstream GETs already use projection {'_id': 0}."
+}
